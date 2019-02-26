@@ -1,6 +1,6 @@
 
 const custom = {
-	port: 8000,
+	port: 8005,
 	ssl: false,
 	urlPrefix: "",
 	endpoint: "graphql",

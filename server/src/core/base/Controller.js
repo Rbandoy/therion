@@ -7,7 +7,7 @@ import RecordNotFound from "./RecordNotFound";
 import ServerError from "./ServerError";
 import Action from "../resolvers/Action";
 
-const log = debug("therion:server:Controller");
+const log = debug("node-paymaya-dev:server:Controller");
 
 class Controller {
 	constructor(model, modelDef) {
@@ -25,10 +25,11 @@ class Controller {
 		const query = {};
 		const modelName = _.camelCase(this._model.name);
 		const modelDef = this._modelDef;
-
+		log("modelName: " + modelName);
+		log("modelDef: " + modelDef);
 		query[`${ modelName }`] = async (obj, args, context) => {
 			let record;
-
+			log(args);
 			try {
 				if (args.id) {
 					record = await this._obj("findById").findById(args.id, args.options, context);
@@ -43,7 +44,7 @@ class Controller {
 
 					record = await this._obj("findOne").findOne(args, context);
 				}
-
+				log("record: " + record);
 				if (!record) {
 					throw new RecordNotFound();
 				}

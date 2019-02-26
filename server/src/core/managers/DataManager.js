@@ -19,6 +19,7 @@ class DataManager {
 				datastore.username, datastore.password, {
 					host: datastore.host,
 					dialect: datastore.dialect,
+					timezone: datastore.timezone,
 					storage: path.join(datastore.location || "", datastore.name) || null,
 					pool: {
 						max: 5,
@@ -29,18 +30,37 @@ class DataManager {
 
 					// http://docs.sequelizejs.com/manual/tutorial/querying.html#operators
 					operatorsAliases: false,
+					define: {
+						defaultScope: {
+							attributes: {
+								exclude: ["createdAt", "updatedAt"],
+							},
+						},
+					},
 				});
 
-			log(`Database connection to ${ datastore.host } has been established successfully.`);
+			log(`Database connection to ${datastore.host} has been established successfully.`);
 
 			// Instantiate models
-			this._models = _.transform(this._config.Datastore.modelSequence, (r, name) => {
-				const modelDef = this._definitions[name];
+			this._models = _.transform(this._definitions, (r, modelDef, name) => {
+				// const modelDef = this._definitions[name];
 
 				log(name);
 
 				r[name] = this.manager.define(_.camelCase(name), modelDef.attributes);
 				r[name].description = modelDef.description;
+
+				if (modelDef.tableName) {
+					r[name].tableName = modelDef.tableName;
+				}
+
+				if (modelDef.timestamps) {
+					r[name].timestamps = false;
+				}
+
+				if (modelDef.date) {
+					r[name].timestamps = false;
+				}
 
 				if (controllers[name]) {
 					_.forEach(controllers[name].hooks, (v, k) => {
@@ -52,31 +72,21 @@ class DataManager {
 			// Construct relationships
 			_.forEach(this._definitions, (modelDef, name) => {
 				if ("associations" in modelDef) {
-					_.forEach(modelDef.associations, (association, fieldName) => {
-						const options = {
-							...association,
-							as: fieldName,
-							type: undefined,
-							model: undefined,
-						};
-
-						switch(association.type) {
-						case "belongsTo":
-							this._models[name][association.type](this._models[association.model], options);
-							break;
-						case "hasOne":
-						case "hasMany":
-						case "belongsToMany":
-							this._models[association.model][association.type](this._models[name], options);
-							break;
-						}
+					_.forEach(modelDef.associations, (association) => {
+						this._models[name][association.type](
+							this._models[association.model], {
+								as: association.alias,
+								foreignKey: association.foreignKey,
+								otherKey: association.otherKey,
+								through: association.through,
+							});
 					}, this);
 				}
 			});
 
 			const mode = this._config.Datastore.mode;
 			const options = (() => {
-				switch(mode) {
+				switch (mode) {
 				case "alter":
 					return {
 						alter: true,
