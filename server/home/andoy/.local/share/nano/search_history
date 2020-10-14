@@ -1,0 +1,9 @@
+PATH
+PATHWEB="/var/www/html/playsms"
+PLAYSMS_PATH="/var/www/playsms"
+root
+
+PATHWEB="/home/vhosts/my.textng.com/html"
+PLAYSMS_PATH="/var/www/html/playsms"
+
+

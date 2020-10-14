@@ -1,0 +1,5 @@
+# HSTS 1.0 Known Hosts database for GNU Wget.
+# Edit at your own risk.
+# <hostname>	<port>	<incl. subdomains>	<created>	<max-age>
+svwh.dl.sourceforge.net	0	1	1579060532	31536000
+sourceforge.net	0	0	1579060518	31536000

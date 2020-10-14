@@ -7,6 +7,10 @@ import RestRequest from "../lib/RestRequest";
 const dateFormat = require("dateformat");
 import PaymayaService from "../services/PaymayaServices";
 import Notification from "../services/Notification";
+import StringMask from "string-mask";
+let mysql = require("mysql");
+var request = require("request"); 
+var fs = require("fs");
 
 import Sequelize from "../db";
 const Op = Sequelize.Op;
@@ -49,165 +53,194 @@ const TransactionService = {
 		return `UPS${String(transactionCode)}${stampGlue.join("")}${generateCode(5, `${accountId}${stampGlue.join("")}`)}`;
 	},
 
-	addUnilevel: async (regcode, amount, trackingNumber, ipAddress, transDescription = "REMIT") => {
-
-		const data = [regcode, amount, 7, transDescription, trackingNumber, ipAddress].join("|");
-
-		const isUnlievelLogExists = await DataManager._models.UnilevelLog.findOne({
-			where: { trackingNumber },
-		});
-
-		const getTransNo = async (regcode) => {
-			const report = await DataManager._models.GeneralReport.findOne({ where: { regcode }, order: [["transNo", "DESC"]] });
-			return report ? report.transNo : 0;
+	addUnilevel: async (regcode, amount, trackingNumber, ipAddress, transDescription = "OTHER") => {
+		log("generate all user"); 
+		
+		let data = {"regcode":regcode, "amount":amount, "transtype":transDescription, "trackno":trackingNumber, "trackdesc":transDescription, "ip":ipAddress};
+		log(data);
+		log(ipAddress);
+		var options = {
+			"method": "POST",
+			"url": "http://35.185.184.154/index.php/ups_ecash_api/unilevel_optimizer",
+			"headers": {
+				"Content-Type": "application/json",
+				"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRob3IiOiJIYXJyeSBSZXllcyIsImRhdGUiOiIxMS8xMi8yMDE5IiwiZGVzY3JpcHRpb24iOiJVc2UgZm9yIHVuaWxldmVsIGFwaSIsImlhdCI6MTUxNjIzOTAyMn0.jc-9nRY6r-HTeQaSbFPihtUdmdB_Pw146q51CtpGkLQ",
+			},
+			body: JSON.stringify(data),
+			// body: JSON.stringify({"regcode":"F5597768","amount":"1","transtype":"OTHER","trackno":"123asdqwezxcasd","trackdesc":"OTHER","ip":"0:00::1"})
 		};
-
-		if (isUnlievelLogExists) {
-			throw new BadRequest("UNILEVEL ALREADY DISTRIBUTED");
-		}
-
-		const unilevelLogs = await DataManager._models.UnilevelLog.create(
-			{ trackingNumber, details: data, status: 0 },
-			{ returning: true }
-		);
-
-		try {
-			const isRegistered = await DataManager._models.FourmmRegistration.findOne({
-				where: { regcode },
-			});
-
-			if (!isRegistered) {
-				throw new BadRequest("NO NETWORK - NO UNILEVEL ADDED");
+		request(options, function (error, response) { 
+			if (error){
+				var writeStream = fs.createWriteStream("src\\error logs\\add unilevel\\"+ trackingNumber +".txt");
+				writeStream.write(error);
+				writeStream.end();
+				return error;  
 			}
+			log(`Axios result ${response.body}`);
+			return response.body;
+		}); 
+		
+		// log(`generate all user end ${regcode, amount, trackingNumber, ipAddress, transDescription}`);
+		// const data = [regcode, amount, 7, transDescription, trackingNumber, ipAddress].join("|");
 
-			let path = await DataManager._models.MpTree.findOne({
-				where: { regcode },
-			});
+		// const isUnlievelLogExists = await DataManager._models.UnilevelLog.findOne({
+		// 	where: { trackingNumber },
+		// });
 
-			if (!path) {
-				throw new BadRequest("INVALID REGCODE");
-			}
+		// const getTransNo = async (regcode) => {
+		// 	const report = await DataManager._models.GeneralReport.findOne({ where: { regcode }, order: [["transNo", "DESC"]] });
+		// 	return report ? report.transNo : 0;
+		// };
 
-			path = path.path.split(",");
-			path = path.slice(0, 10);
+		// if (isUnlievelLogExists) {
+		// 	throw new BadRequest("UNILEVEL ALREADY DISTRIBUTED");
+		// }
 
-			const mpTrees = await DataManager._models.MpTree.findAll({
-				where: {
-					id: path,
-				},
-			});
+		// const unilevelLogs = await DataManager._models.UnilevelLog.create(
+		// 	{ trackingNumber, details: data, status: 0 },
+		// 	{ returning: true }
+		// );
 
-			const regcodes = [];
-			mpTrees.map((mpTree) => {
-				if (mpTree.regcode !== regcode) {
-					regcodes.push(mpTree.regcode);
-				}
-			});
+		// try {
+		// 	const isRegistered = await DataManager._models.FourmmRegistration.findOne({
+		// 		where: { regcode },
+		// 	});
 
-			const fourmmRegistrations = await DataManager._models.FourmmRegistration.findAll({
-				where: {
-					regcode: regcodes,
-				},
-			});
+		// 	if (!isRegistered) {
+		// 		throw new BadRequest("NO NETWORK - NO UNILEVEL ADDED");
+		// 	}
 
-			const multiTree = [];
-			fourmmRegistrations.map((fourmmRegistration) => {
-				multiTree.push(fourmmRegistration.accountType !== "GLOBAL" ? "RS000004" : fourmmRegistration.regcode);
-			});
+		// let path = await DataManager._models.MpTree.findOne({
+		// 	where: { regcode },
+		// });
 
-			const counts = Object.create(null);
-			let regcodeList = [];
-			multiTree.forEach(mt => {
-				counts[mt] = counts[mt] ? counts[mt] + 1 : 1;
-				regcodeList.push(mt);
-			});
+		// 	if (!path) {
+		// 		throw new BadRequest("INVALID REGCODE");
+		// 	}
 
-			regcodeList = regcodeList.filter((v, i, a) => a.indexOf(v) === i);
+		// 	path = path.path.split(",");
+		// 	path = path.slice(0, 10);
 
-			log(regcodeList);
-			const users = await DataManager._models.User.findAll({
-				where: {
-					regcode: regcodeList,
-				},
-			});
+		// 	const mpTrees = await DataManager._models.MpTree.findAll({
+		// 		where: {
+		// 			id: path,
+		// 		},
+		// 	});
 
-			const generalReportData = [];
+		// 	const regcodes = [];
+		// 	mpTrees.map((mpTree) => {
+		// 		if (mpTree.regcode !== regcode) {
+		// 			regcodes.push(mpTree.regcode);
+		// 		}
+		// 	});
 
-			const date = moment().format("YYYY-MM-DD");
-			const time = moment().format("HH:mm:ss");
+		// 	const fourmmRegistrations = await DataManager._models.FourmmRegistration.findAll({
+		// 		where: {
+		// 			regcode: regcodes,
+		// 		},
+		// 	});
 
-			await Promise.all(users.map(async (user) => {
-				generalReportData.push({
-					transNo: await getTransNo(user.regcode) + 1,
-					regcode: user.regcode,
-					trackingNumber,
-					transType: 18,
-					date,
-					time,
-					ipAddress,
-					amount: amount * counts[user.regcode],
-					balanceBefore: parseFloat(user.ecashWallet),
-					balanceAfter: parseFloat(user.ecashWallet) + (amount * counts[user.regcode]),
-				});
-			}));
+		// 	const multiTree = [];
+		// 	fourmmRegistrations.map((fourmmRegistration) => {
+		// 		multiTree.push(fourmmRegistration.accountType !== "GLOBAL" ? "RS000004" : fourmmRegistration.regcode);
+		// 	});
 
-			if (counts["RS000004"]) {
-				generalReportData.push({
-					transNo: await getTransNo("RS000004") + 1,
-					regcode: "RS000004",
-					trackingNumber,
-					transType: 7,
-					date,
-					time,
-					ipAddress,
-					amount: amount * counts["RS000004"],
-					balanceBefore: 0,
-					balanceAfter: 0,
-				});
-			}
+		// 	const counts = Object.create(null);
+		// 	let regcodeList = [];
+		// 	multiTree.forEach(mt => {
+		// 		counts[mt] = counts[mt] ? counts[mt] + 1 : 1;
+		// 		regcodeList.push(mt);
+		// 	});
 
-			log(generalReportData);
+		// 	regcodeList = regcodeList.filter((v, i, a) => a.indexOf(v) === i);
 
-			await DataManager._models.GeneralReport.bulkCreate(generalReportData);
-			log([DataManager._manager.literal(`ecashWallet + ${amount}`)]);
-			await DataManager._models.User.update({
-				ecashWallet: DataManager._manager.literal(`virtualvisa_fund + ${amount}`),
-			}, {
-				where: {
-					regcode: regcodeList,
-				},
+		// 	log(regcodeList);
+		// 	const users = await DataManager._models.User.findAll({
+		// 		where: {
+		// 			regcode: regcodeList,
+		// 		},
+		// 	});
+		// 	log(`unilevel allocation ${users}`);
+		// 	const generalReportData = [];
 
-			});
+		// 	const date = moment().format("YYYY-MM-DD");
+		// 	const time = moment().format("HH:mm:ss");
+
+		// 	await Promise.all(users.map(async (user) => {
+		// 		generalReportData.push({
+		// 			transNo: await getTransNo(user.regcode) + 1,
+		// 			regcode: user.regcode,
+		// 			trackingNumber,
+		// 			transType: 18,
+		// 			date,
+		// 			time,
+		// 			ipAddress,
+		// 			amount: amount * counts[user.regcode],
+		// 			balanceBefore: parseFloat(user.ecashWallet),
+		// 			balanceAfter: parseFloat(user.ecashWallet) + (amount * counts[user.regcode]),
+		// 		});
+		// 	}));
+		// 	log("generate all user");
+		// 	if (counts["RS000004"]) {
+		// 		generalReportData.push({
+		// 			transNo: await getTransNo("RS000004") + 1,
+		// 			regcode: "RS000004",
+		// 			trackingNumber,
+		// 			transType: 7,
+		// 			date,
+		// 			time,
+		// 			ipAddress,
+		// 			amount: amount * counts["RS000004"],
+		// 			balanceBefore: 0,
+		// 			balanceAfter: 0,
+		// 		});
+		// 	}
+
+		// 	log(generalReportData);
+
+		// 	await DataManager._models.GeneralReport.bulkCreate(generalReportData);
+		// 	log([DataManager._manager.literal(`ecashWallet + ${amount}`)]);
+		// 	await DataManager._models.User.update({
+		// 		ecashWallet: DataManager._manager.literal(`virtualvisa_fund + ${amount}`),
+		// 	}, {
+		// 		where: {
+		// 			regcode: regcodeList,
+		// 		},
+
+		// 	});
 
 
-			await DataManager._models.UnilevelLog.update({
-				remarks: "SUCCESS - UNILEVEL",
-				status: 1,
-			}, {
-				where: {
-					id: unilevelLogs.id,
-				},
-			});
+		// 	await DataManager._models.UnilevelLog.update({
+		// 		remarks: "SUCCESS - UNILEVEL",
+		// 		status: 1,
+		// 	}, {
+		// 		where: {
+		// 			id: unilevelLogs.id,
+		// 		},
+		// 	});
 
-			return counts;
+		// 	return counts;
 
 
-		} catch (error) {
+		// } catch (error) {
 
-			log({ "addUnilevel": error });
-			if (!unilevelLogs.status) {
-				await DataManager._models.UnilevelLog.update({
-					remarks: error.message,
-					status: 0,
-				}, {
-					where: {
-						id: unilevelLogs.id,
-					},
-				});
-			}
+		// 	log({ "addUnilevel": error });
+		// 	if (!unilevelLogs.status) {
+		// 		await DataManager._models.UnilevelLog.update({
+		// 			remarks: error.message,
+		// 			status: 0,
+		// 		}, {
+		// 			where: {
+		// 				id: unilevelLogs.id,
+		// 			},
+		// 		});
+		// 	}
 
-			return error.message;
-		}
+		// 	return error.message;
+		// }
+		
+
+
 	},
 
 	generateUUID: () => {
@@ -227,8 +260,9 @@ const TransactionService = {
 			/* eslint-enable */
 		});
 	},
-
+	
 	OTP: async (otpAction, request) => {
+		log("===========================OTP ENDPOINT====================");
 		const url = "http://35.187.230.79/sender/" + otpAction;
 
 		const header = {
@@ -236,14 +270,17 @@ const TransactionService = {
 			"cache-control": "no-cache",
 			"accept": "application/json",
 		};
-
+	
 		const response = await RestRequest.sendRequestFormData("POST", url, header, request);
+		log("===========================OTP ENDPOINT====================");
 		log(JSON.stringify(response));
+		log("=========================================");
 		if (response.body) {
 			return response.body;
 		} else {
 			return response.response.body;
 		}
+		
 	},
 
 	unholdRemittance: async (parameters, request) => {
@@ -389,7 +426,11 @@ const TransactionService = {
 		if (remittanceResponse.body) {
 			return remittanceResponse.body;
 		} else {
-			return remittanceResponse.response.body;
+			log({ remittanceResponse });
+			if (remittanceResponse.response) {
+				return remittanceResponse.response.body;
+			}
+			return remittanceResponse;
 		}
 	},
 
@@ -412,13 +453,20 @@ const TransactionService = {
 		} else if (userLevel == 7) {
 			accounttype = "HUB";
 		}
-
-		log({ charges: JSON.stringify(charges) });
-		return {
-			charge: charges.serviceCharge,
-			acount: accounttype,
-		};
-
+		log("has rates"+charges);
+		if (!charges) {
+			return {
+				charge: 0,
+				acount: accounttype,
+			};
+		} else {
+			log({ charges: JSON.stringify(charges) });
+			return {
+				charge: charges.serviceCharge,
+				acount: accounttype,
+			};
+		}
+		
 	},
 
 	sendEmail: async (email, trackingNumber) => {
@@ -428,7 +476,7 @@ const TransactionService = {
 		try {
 			await Notification.sendEmail({
 				message: "<p>Thank you for sending remittance at Unified Products and Services </p>" +
-					`<p>Please click on the link below to view your receipt: http://10.10.1.106:8004/portal/ecash_to_paymaya_receipt/${trackingNumber}</p>` +
+					`<p>Please click on the link below to view your receipt: https://mobilereports.globalpinoyremittance.com/portal/ecash_to_paymaya_receipt/${trackingNumber}</p>` +
 					"<i><small>*If you are unable to click the link, please copy and paste the url in your browser.</small></i>",
 				subject: "Remittance Transaction Receipt",
 				email: email,
@@ -439,6 +487,47 @@ const TransactionService = {
 			throw new BadRequest(JSON.stringify(error));
 		}
 	},
+
+	sendSms: async(mobileNo, amount, accNo, refNo) => {
+		let connection = mysql.createConnection({
+			host    : "35.197.142.149",
+			user    : "IT_reneboy",
+			password: "zusez3freemake12",
+			database: "gprsnetwork",
+		}); 
+		let maskAccNo = ""; 
+		maskAccNo = accNo.replace(accNo.substr(4, 8),  "xxxxxxxx");
+		var formatter = new StringMask("0000 0000 0000 0000");
+		log(formatter.apply(maskAccNo));
+		var d = new Date();
+		var month = {
+			"0": "jan",
+			"1": "feb",
+			"2": "march",
+			"3": "april",
+			"4": "may",
+			"5": "jun",
+			"6": "july",
+			"7": "aug",
+			"8": "sept",
+			"9": "oct",
+			"10": "nov",
+			"11": "dec",
+		};
+		let date = d.getDate() + "" + month[d.getMonth()]+ "  "+d.getHours()+":"+d.getMinutes();
+		let MSent = `${date}:Sent ${amount} from UNIFIED to ${maskAccNo}. Reference: ${refNo}`;
+		let sql = `Call sp_insert_sms_remittance('${mobileNo}','${MSent}')`;
+	
+ 
+		connection.query(sql, true, (error, results) => {
+			if (error) {
+				log(error);
+				throw new BadRequest(JSON.stringify(results));
+			}
+			log(results); 
+		}); 
+		connection.end();
+	}, 
 
 	status: async (userLevel, totalAmount) => {
 		let status = "OTP";

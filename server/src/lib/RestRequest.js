@@ -47,8 +47,6 @@ const RestRequest = {
 			throw error;
 		}
 	},
-
-
 };
 
 export default RestRequest;

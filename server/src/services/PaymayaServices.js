@@ -9,25 +9,32 @@ const log = debug("therion:server:PaymayaService");
 
 const PaymayaService = {
 	createRemittances: async (data) => {
-		let paymayaURL = "https://pg-sandbox-kong.paymaya.com/remittances/v2";
 		let apiKey = "";
-		log("data.channel == \"smny\"");
-		log(data.body.channel == "smny");
+		// let paymayaURL = "https://pg.paymaya.com/remittances/v2"; //production
+		// apiKey = "c2stZExGa0pCcUw1bnhDbWlmblNWV2p2cUVxTHY0QjlBV2xPU0lUYzVqajI3Ug=="; //production
 
-		// if (data.body.channel == "smny") {
-		apiKey = "c2stUGdpdWd0OVFlUTdGUW5penZIUnV6ODVnZ3o5eVp2d2VWdzVyRlZNWXlxRA==";
-		// }
 
+		let paymayaURL = "https://pg-sandbox.paymaya.com/remittances/v2"; // test envi
+		apiKey = "c2stMmRqTWtOaUNSbHlYaVEzcERxNUVyYlp1ZUVnMHllUllaRUw3U1d1TE5UMA=="; //test envi
+		// log("data.channel == \"smny\"");
+		// log(data.body.channel == "smny");
+
+		
+		
 		const varHeader = {
 			"Content-Type": "application/json",
 			"Request-Reference-Number": data.requestReferenceNumber,
 			Authorization: "Basic " + apiKey,
+			"Client-id": "RSE21-GPRS-D2A",
 		};
 
-		log("Method : " + data.method + "\n URL : " + paymayaURL);
-		log("var header : ", varHeader);
-		log("\n\n BODY REQUEST", JSON.stringify(data.body), "\n\n BODY REQUEST END");
+		log(` CREATING REMITTANCE - Sending  Request:
+		Method: ${data.method}
+		URL: ${paymayaURL}
+		Headers: ${varHeader}
+		Payload: ${JSON.stringify(data.body)}`);
 		try {
+			
 			const result = await RestRequest.sendRequest(
 				data.method,
 				paymayaURL,
@@ -35,25 +42,30 @@ const PaymayaService = {
 				data.body
 			);
 
-			log(result);
-			log("\n\n\n\nResults from API " + paymayaURL + "\n\n\n\n");
-			log(JSON.stringify(result));
-			log("- -- -- - -  -- - END OF API REQUEST --------------------");
+			log(`REMITTANCE RESPONSE: SUCCESS
+			Source: ${paymayaURL}
+			Response: ${JSON.stringify(result.body)}
+			`);
 			return result;
 		} catch (error) {
-			log({ "API ERROR on createRemittances": JSON.stringify(error) });
-			log("\n\n");
+
+			log(`REMITTANCE RESPONSE: FAILED
+			Source: ${paymayaURL}
+			Response: ${JSON.stringify(error)}
+			`);
 			return error;
 		}
 	},
 
 	executeRemittance: async (channel, requestReferenceNumber, transactionReferenceNumber) => {
-		let paymayaURL = "https://pg-sandbox-kong.paymaya.com/remittances/v2/" + transactionReferenceNumber + "/execute";
+		// let paymayaURL = "https://pg.paymaya.com/remittances/v2/" + transactionReferenceNumber + "/execute";
+		let paymayaURL = "https://pg-sandbox.paymaya.com/remittances/v2/" + transactionReferenceNumber + "/execute"; // test envi
 		let apiKey = "";
 		log("channel : ", channel);
 
 		if (channel == "smny") {
-			apiKey = "c2stUGdpdWd0OVFlUTdGUW5penZIUnV6ODVnZ3o5eVp2d2VWdzVyRlZNWXlxRA==";
+		//  apiKey = "c2stZExGa0pCcUw1bnhDbWlmblNWV2p2cUVxTHY0QjlBV2xPU0lUYzVqajI3Ug=="; //production
+			apiKey = "c2stMmRqTWtOaUNSbHlYaVEzcERxNUVyYlp1ZUVnMHllUllaRUw3U1d1TE5UMA=="; //test envi
 		}
 
 		const varHeader = {
